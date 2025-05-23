@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  bot:
+    build: .
+    container_name: smartshop-bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./logs:/app/logs
+      - ./data:/app/data
+    depends_on:
+      - db
+      - redis
+    networks:
+      - bot-network
+
+  db:
+    image: postgres:15-alpine
+    container_name: smartshop-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: smartshop
+      POSTGRES_USER: botuser
+      POSTGRES_PASSWORD: secure_password_here
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./data/backups:/backups
+    networks:
+      - bot-network
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:7-alpine
+    container_name: smartshop-redis
+    restart: unless-stopped
+    networks:
+      - bot-network
+
+volumes:
+  postgres_data:
+
+networks:
+  bot-network:
+    driver: bridge
