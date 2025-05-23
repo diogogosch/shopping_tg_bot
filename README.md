@@ -24,7 +24,7 @@ An intelligent Telegram bot that automates shopping list management by processin
 ### Installation from GitHub
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/smartshop-bot.git
+git clone https://github.com/diogogosch/smartshop-bot.git
 cd smartshop-bot
 chmod +x setup.sh
 ./setup.sh
@@ -34,7 +34,7 @@ chmod +x setup.sh
 
 1. **Clone the repository:**
 ```bash
-git clone https://github.com/YOUR_USERNAME/smartshop-bot.git
+git clone https://github.com/diogogosch/smartshop-bot.git
 cd smartshop-bot
 ```
 
