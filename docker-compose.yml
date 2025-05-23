@@ -3,45 +3,64 @@ version: '3.8'
 services:
   bot:
     build: .
-    container_name: smartshop-bot
-    restart: unless-stopped
-    env_file:
-      - .env
-    volumes:
-      - ./logs:/app/logs
-      - ./data:/app/data
-    depends_on:
-      - db
-      - redis
-    networks:
-      - bot-network
-
-  db:
-    image: postgres:15-alpine
-    container_name: smartshop-db
+    container_name: smartshop_bot
     restart: unless-stopped
     environment:
-      POSTGRES_DB: smartshop
-      POSTGRES_USER: botuser
-      POSTGRES_PASSWORD: secure_password_here
+      - DATABASE_URL=postgresql://smartshop:password@postgres:5432/smartshop_db
+      - REDIS_URL=redis://redis:6379
+      - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - LOG_LEVEL=INFO
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ./app:/app
+      - ./logs:/app/logs
+    networks:
+      - smartshop_network
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: smartshop_postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=smartshop_db
+      - POSTGRES_USER=smartshop
+      - POSTGRES_PASSWORD=password
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./data/backups:/backups
-    networks:
-      - bot-network
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
     ports:
       - "5432:5432"
+    networks:
+      - smartshop_network
 
   redis:
     image: redis:7-alpine
-    container_name: smartshop-redis
+    container_name: smartshop_redis
     restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
     networks:
-      - bot-network
+      - smartshop_network
+
+  adminer:
+    image: adminer
+    container_name: smartshop_adminer
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    networks:
+      - smartshop_network
 
 volumes:
   postgres_data:
+  redis_data:
 
 networks:
-  bot-network:
+  smartshop_network:
     driver: bridge
