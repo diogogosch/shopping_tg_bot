@@ -53,7 +53,7 @@ services:
     container_name: smartshop_adminer
     restart: unless-stopped
     ports:
-      - "8080:8080"
+      - "8181:8080"
     networks:
       - smartshop_network
 
