@@ -18,8 +18,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    volumes:
-      - ./temp:/app/temp
+    #volumes:
+     # - ./temp:/app/temp
     networks:
       - smartshop_network
     labels:
