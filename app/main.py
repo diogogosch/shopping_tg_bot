@@ -1,105 +1,36 @@
-import logging
-import json
-from fastapi import FastAPI
-from fastapi.responses import JSONResponse
-from telegram import Update
-from telegram.ext import (
-    Application,
-    CommandHandler,
-    MessageHandler,
-    filters,
-    ContextTypes,
-)
-from app.handlers.receipt_handler import process_receipt
-from app.handlers.shopping_handler import (
-    add_to_shopping_list,
-    remove_from_shopping_list,
-    show_shopping_list,
-    clear_shopping_list,
-)
-from app.handlers.settings_handler import (
-    set_currency,
-    set_language,
-    manage_stores,
-    show_settings,
-)
-from app.handlers.stats_handler import show_stats
-from app.handlers.suggestion_handler import get_suggestions
-from app.services.database import get_db
-from app.services.cache import Cache
-from app.services.ai_service import AIService
-from app.services.notification_service import NotificationService
-from app.services.i18n_service import i18n
-from app.config.settings import settings
+import threading
 import schedule
 import time
-import threading
+from telegram.ext import Application, CommandHandler, MessageHandler, filters
+from app.handlers.shopping_handler import add_to_shopping_list, remove_from_shopping_list, show_shopping_list, clear_shopping_list
+from app.handlers.settings_handler import set_currency, set_language, manage_stores, show_settings
+from app.handlers.stats_handler import show_stats
+from app.handlers.suggestions_handler import get_suggestions
+from app.handlers.receipt_handler import process_receipt
+from app.database import create_tables
+from app.services.notification_service import NotificationService
+from app.utils import i18n
+from app import settings
+import logging
 
-# Configure structured logging
-logging.basicConfig(
-    level=getattr(logging, settings.log_level),
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
 logger = logging.getLogger(__name__)
-
-app = FastAPI()
-cache = Cache()
-ai_service = AIService()
 notification_service = NotificationService()
-
-def create_tables():
-    from app.models import Base
-    from sqlalchemy import create_engine
-    engine = create_engine(settings.database_url)
-    Base.metadata.create_all(engine)
-    logger.info("Database tables created successfully")
-
-@app.get("/health")
-async def health_check():
-    status = {"status": "healthy", "components": {}}
-    
-    try:
-        with get_db() as db:
-            db.execute("SELECT 1")
-        status["components"]["database"] = "healthy"
-    except Exception as e:
-        status["status"] = "unhealthy"
-        status["components"]["database"] = f"error: {str(e)}"
-    
-    try:
-        if cache.redis_client:
-            cache.redis_client.ping()
-        status["components"]["redis"] = "healthy"
-    except Exception as e:
-        status["status"] = "unhealthy"
-        status["components"]["redis"] = f"error: {str(e)}"
-    
-    if settings.enable_ai_suggestions and settings.ai_provider != "none":
-        try:
-            ai_service.test_connection()
-            status["components"]["ai"] = "healthy"
-        except Exception as e:
-            status["status"] = "unhealthy"
-            status["components"]["ai"] = f"error: {str(e)}"
-    
-    if status["status"] == "unhealthy":
-        return JSONResponse(status, status_code=500)
-    return JSONResponse(status)
 
 def run_scheduler():
     while True:
         schedule.run_pending()
-        time.sleep(60)
+        time.sleep(1)
 
 def main():
     create_tables()
     
     application = Application.builder().token(settings.telegram_token).build()
     
-    # Set notification service application
     notification_service.set_application(application)
     
-    # Register handlers
+    if settings.enable_notifications:
+        schedule.every().day.at("08:00").do(notification_service.send_daily_notifications)
+    
     application.add_handler(CommandHandler("start", lambda update, context: update.message.reply_text(
         i18n.get_text("welcome_message", update.effective_user.language_code, name=update.effective_user.first_name) +
         "\n\n" + i18n.get_text("features_title", update.effective_user.language_code) +
@@ -118,4 +49,34 @@ def main():
     )))
     application.add_handler(CommandHandler("help", lambda update, context: update.message.reply_text(
         "Commands:\n" +
-        i18n.get_text("cmd_add", update.effective_user.language_code) + " - Add items (e.g., '/add milk 2L
+        i18n.get_text("cmd_add", update.effective_user.language_code) + " - Add items (e.g., '/add milk 2L')\n" +
+        i18n.get_text("cmd_list", update.effective_user.language_code) + " - View shopping list\n" +
+        i18n.get_text("cmd_suggestions", update.effective_user.language_code) + " - Get AI recommendations\n" +
+        i18n.get_text("cmd_receipt", update.effective_user.language_code) + " - Process receipt photo\n" +
+        i18n.get_text("cmd_stats", update.effective_user.language_code) + " - View shopping analytics\n" +
+        i18n.get_text("cmd_settings", update.effective_user.language_code) + " - Configure preferences\n" +
+        i18n.get_text("cmd_currency", update.effective_user.language_code) + " - Set currency\n" +
+        i18n.get_text("cmd_language", update.effective_user.language_code) + " - Set language\n" +
+        i18n.get_text("cmd_stores", update.effective_user.language_code) + " - Manage favorite stores\n" +
+        i18n.get_text("cmd_clear", update.effective_user.language_code) + " - Clear shopping list"
+    )))
+    application.add_handler(CommandHandler("add", add_to_shopping_list))
+    application.add_handler(CommandHandler("remove", remove_from_shopping_list))
+    application.add_handler(CommandHandler("list", show_shopping_list))
+    application.add_handler(CommandHandler("clear", clear_shopping_list))
+    application.add_handler(CommandHandler("currency", set_currency))
+    application.add_handler(CommandHandler("language", set_language))
+    application.add_handler(CommandHandler("stores", manage_stores))
+    application.add_handler(CommandHandler("settings", show_settings))
+    application.add_handler(CommandHandler("stats", show_stats))
+    application.add_handler(CommandHandler("suggestions", get_suggestions))
+    application.add_handler(CommandHandler("receipt", process_receipt))
+    application.add_handler(MessageHandler(filters.PHOTO, process_receipt))
+    
+    scheduler_thread = threading.Thread(target=run_scheduler, daemon=True)
+    scheduler_thread.start()
+    
+    application.run_polling()
+
+if __name__ == "__main__":
+    main()

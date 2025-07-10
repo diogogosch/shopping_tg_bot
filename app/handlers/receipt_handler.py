@@ -1,21 +1,17 @@
-import logging
-from telegram import Update
-from telegram.ext import ContextTypes
-from app.services.ocr_service import OCRService
-from app.services.ai_service import AIService
-from app.services.database import get_db
-from app.models import Receipt, ReceiptItem, Product
-from tenacity import retry, stop_after_attempt, wait_exponential
-from app.services.i18n_service import i18n
 import os
 from datetime import datetime
+from telegram import Update
+from telegram.ext import ContextTypes
+from telegram.error import TelegramError
+from app.database import get_db
+from app.models import Receipt, ReceiptItem, Product
+from app.services import ocr_service, ai_service
+from app.utils import i18n
+from app import settings
+import logging
 
 logger = logging.getLogger(__name__)
 
-ocr_service = OCRService()
-ai_service = AIService()
-
-@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
 async def process_receipt(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message.photo:
         await update.message.reply_text(i18n.get_text("cmd_receipt", update.effective_user.language_code))
@@ -23,12 +19,17 @@ async def process_receipt(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     photo = update.message.photo[-1]
     file = await photo.get_file()
+    os.makedirs("temp", exist_ok=True)
     file_path = f"temp/{photo.file_id}.jpg"
     
     try:
-        await file.download(file_path)
+        try:
+            await file.download(file_path)
+        except TelegramError as te:
+            logger.error(f"Failed to download photo: {te}")
+            await update.message.reply_text("Failed to download receipt image. Please try again.")
+            return
         
-        # Process with OCR
         with open(file_path, "rb") as image_file:
             image_data = image_file.read()
         receipt_data = ocr_service.extract_text_from_receipt(image_data)
@@ -37,7 +38,6 @@ async def process_receipt(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(i18n.get_text("no_suggestions_data", update.effective_user.language_code))
             return
         
-        # Save to database
         with get_db() as db:
             receipt = Receipt(
                 user_id=update.effective_user.id,
@@ -75,7 +75,6 @@ async def process_receipt(update: Update, context: ContextTypes.DEFAULT_TYPE):
             i18n.get_text("item_added", update.effective_user.language_code).format(item=f"{len(receipt_data['items'])} items")
         )
         
-        # Generate AI suggestions
         if settings.enable_ai_suggestions:
             suggestions = await ai_service.generate_suggestions([item["name"] for item in receipt_data["items"]])
             if suggestions:
