@@ -1,48 +1,12 @@
-version: '3.8'
-
 services:
-  bot:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: smartshop_bot
-    restart: unless-stopped
-    environment:
-      - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - GOOGLE_VISION_API_KEY=${GOOGLE_VISION_API_KEY}
-      - DATABASE_URL=${DATABASE_URL}
-      - REDIS_URL=${REDIS_URL}
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
-      - DATABASE_POOL_SIZE=${DATABASE_POOL_SIZE:-10}
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    volumes:
-      - ./app:/app
-      - ./temp:/app/temp
-      - logs:/app/logs
-    networks:
-      - smartshop_network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    labels:
-      - "com.portainer.description=SmartShopBot application"
-      - "com.portainer.accesscontrol=true"
-
   postgres:
     image: postgres:15-alpine
     container_name: smartshop_postgres
     restart: unless-stopped
     environment:
-      - POSTGRES_DB=smartshop_db
-      - POSTGRES_USER=smartshop
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      POSTGRES_DB: smartshop_db
+      POSTGRES_USER: smartshop
+      POSTGRES_PASSWORD: securepassword123  # Use a strong password
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
@@ -56,51 +20,25 @@ services:
       timeout: 5s
       retries: 5
 
-  redis:
-    image: redis:7-alpine
-    container_name: smartshop_redis
+  bot:
+    image: smartshopbot:latest  # Replace with your actual image
+    container_name: smartshop_bot
     restart: unless-stopped
-    command: redis-server --appendonly yes --maxmemory ${REDIS_MAX_MEMORY:-512mb} --maxmemory-policy allkeys-lru
-    volumes:
-      - redis_data:/data
-    ports:
-      - "6379:6379"
-    networks:
-      - smartshop_network
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  adminer:
-    image: adminer
-    container_name: smartshop_adminer
-    restart: unless-stopped
+    depends_on:
+      - postgres
     environment:
-      - ADMINER_DEFAULT_SERVER=postgres
-      - ADMINER_DESIGN=pepa-linha
-      - ADMINER_PLUGINS=login-password-less
-      - ADMINER_USERNAME=admin
-      - ADMINER_PASSWORD=${ADMINER_PASSWORD:-admin123}
-    ports:
-      - "8181:8080"
+      - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - GOOGLE_VISION_API_KEY=${GOOGLE_VISION_API_KEY}
+      - REDIS_URL=redis://redis:6379
+      - AI_PROVIDER=${AI_PROVIDER}
+      - ADMINER_PASSWORD=${ADMINER_PASSWORD}
     networks:
       - smartshop_network
-    labels:
-      - "com.portainer.description=Adminer for PostgreSQL management"
-      - "com.portainer.accesscontrol=true"
-
-volumes:
-  postgres_data:
-  redis_data:
-  logs:
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: ./logs
 
 networks:
   smartshop_network:
     driver: bridge
+
+volumes:
+  postgres_data:
