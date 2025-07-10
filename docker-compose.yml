@@ -21,7 +21,6 @@ services:
     volumes:
       - ./app:/app
       - ./temp:/app/temp
-      - logs:/app/logs
     networks:
       - smartshop_network
     healthcheck:
@@ -88,12 +87,6 @@ services:
 volumes:
   postgres_data:
   redis_data:
-  logs:
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: ./logs
 
 networks:
   smartshop_network:
