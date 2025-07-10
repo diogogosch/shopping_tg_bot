@@ -15,12 +15,21 @@ from app.handlers.shopping_handler import (
     add_to_shopping_list,
     remove_from_shopping_list,
     show_shopping_list,
+    clear_shopping_list,
 )
+from app.handlers.settings_handler import (
+    set_currency,
+    set_language,
+    manage_stores,
+    show_settings,
+)
+from app.handlers.stats_handler import show_stats
 from app.handlers.suggestion_handler import get_suggestions
 from app.services.database import get_db
 from app.services.cache import Cache
 from app.services.ai_service import AIService
 from app.services.notification_service import NotificationService
+from app.services.i18n_service import i18n
 from app.config.settings import settings
 import schedule
 import time
@@ -49,7 +58,6 @@ def create_tables():
 async def health_check():
     status = {"status": "healthy", "components": {}}
     
-    # Test database connection
     try:
         with get_db() as db:
             db.execute("SELECT 1")
@@ -58,7 +66,6 @@ async def health_check():
         status["status"] = "unhealthy"
         status["components"]["database"] = f"error: {str(e)}"
     
-    # Test Redis connection
     try:
         if cache.redis_client:
             cache.redis_client.ping()
@@ -67,7 +74,6 @@ async def health_check():
         status["status"] = "unhealthy"
         status["components"]["redis"] = f"error: {str(e)}"
     
-    # Test AI connection if enabled
     if settings.enable_ai_suggestions and settings.ai_provider != "none":
         try:
             ai_service.test_connection()
@@ -90,32 +96,26 @@ def main():
     
     application = Application.builder().token(settings.telegram_token).build()
     
+    # Set notification service application
+    notification_service.set_application(application)
+    
     # Register handlers
     application.add_handler(CommandHandler("start", lambda update, context: update.message.reply_text(
-        f"Welcome to {settings.bot_username}! Use /help to see available commands."
+        i18n.get_text("welcome_message", update.effective_user.language_code, name=update.effective_user.first_name) +
+        "\n\n" + i18n.get_text("features_title", update.effective_user.language_code) +
+        "\n" + i18n.get_text("feature_lists", update.effective_user.language_code) +
+        "\n" + i18n.get_text("feature_receipts", update.effective_user.language_code) +
+        "\n" + i18n.get_text("feature_ai", update.effective_user.language_code) +
+        "\n" + i18n.get_text("feature_tracking", update.effective_user.language_code) +
+        "\n" + i18n.get_text("feature_stores", update.effective_user.language_code) +
+        "\n\n" + i18n.get_text("quick_start", update.effective_user.language_code) +
+        "\n" + i18n.get_text("cmd_add", update.effective_user.language_code) +
+        "\n" + i18n.get_text("cmd_list", update.effective_user.language_code) +
+        "\n" + i18n.get_text("cmd_suggestions", update.effective_user.language_code) +
+        "\n" + i18n.get_text("cmd_receipt", update.effective_user.language_code) +
+        "\n" + i18n.get_text("cmd_stats", update.effective_user.language_code) +
+        "\n" + i18n.get_text("ready_message", update.effective_user.language_code)
     )))
     application.add_handler(CommandHandler("help", lambda update, context: update.message.reply_text(
-        "Commands:\n/receipt - Upload a receipt photo\n/add <item> - Add item to shopping list\n/remove <item> - Remove item\n/list - Show shopping list\n/suggestions - Get AI suggestions"
-    )))
-    application.add_handler(MessageHandler(filters.PHOTO, process_receipt))
-    application.add_handler(CommandHandler("add", add_to_shopping_list))
-    application.add_handler(CommandHandler("remove", remove_from_shopping_list))
-    application.add_handler(CommandHandler("list", show_shopping_list))
-    application.add_handler(CommandHandler("suggestions", get_suggestions))
-    
-    # Schedule notifications
-    if settings.enable_notifications:
-        schedule.every().day.at("08:00").do(notification_service.send_daily_notifications)
-        threading.Thread(target=run_scheduler, daemon=True).start()
-        logger.info("Notification scheduler started")
-    
-    # Start FastAPI for health checks
-    import uvicorn
-    threading.Thread(target=lambda: uvicorn.run(app, host="0.0.0.0", port=8080), daemon=True).start()
-    
-    # Run bot
-    logger.info("Starting SmartShopBot")
-    application.run_polling(allowed_updates=Update.ALL_TYPES)
-
-if __name__ == "__main__":
-    main()
+        "Commands:\n" +
+        i18n.get_text("cmd_add", update.effective_user.language_code) + " - Add items (e.g., '/add milk 2L
