@@ -13,6 +13,9 @@ RUN pip install --no-cache-dir -r requirements.txt && \
 # Copy the entire project
 COPY . .
 
+# Verify main.py exists
+RUN test -f /app/app/main.py
+
 # Add the parent directory to Python path
 ENV PYTHONPATH=/app
 

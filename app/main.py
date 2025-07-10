@@ -13,9 +13,10 @@ from app.handlers.receipt_handler import process_receipt
 from app.core.database import create_tables
 from app.services.notification_service import NotificationService
 from app.utils import i18n
-from app import settings
+from app.config.settings import settings
 import logging
 from aiohttp import web
+import asyncio 
 
 logger = logging.getLogger(__name__)
 notification_service = NotificationService()
