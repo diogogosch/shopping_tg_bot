@@ -5,21 +5,34 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters
 from app.handlers.shopping_handler import add_to_shopping_list, remove_from_shopping_list, show_shopping_list, clear_shopping_list
 from app.handlers.settings_handler import set_currency, set_language, manage_stores, show_settings
 from app.handlers.stats_handler import show_stats
-from app.handlers.suggestions_handler import get_suggestions
+from app.handlers.suggestion_handler import get_suggestions
 from app.handlers.receipt_handler import process_receipt
-from app.database import create_tables
+from app.core.database import create_tables
 from app.services.notification_service import NotificationService
 from app.utils import i18n
 from app import settings
 import logging
+from aiohttp import web
 
 logger = logging.getLogger(__name__)
 notification_service = NotificationService()
+
+async def health_check(request):
+    return web.Response(text="OK", status=200)
 
 def run_scheduler():
     while True:
         schedule.run_pending()
         time.sleep(1)
+
+def run_health_server():
+    app = web.Application()
+    app.add_routes([web.get('/health', health_check)])
+    runner = web.AppRunner(app)
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(runner.setup())
+    site = web.TCPSite(runner, '0.0.0.0', 8080)
+    loop.run_until_complete(site.start())
 
 def main():
     create_tables()
@@ -76,7 +89,11 @@ def main():
     scheduler_thread = threading.Thread(target=run_scheduler, daemon=True)
     scheduler_thread.start()
     
+    health_thread = threading.Thread(target=run_health_server, daemon=True)
+    health_thread.start()
+    
     application.run_polling()
 
 if __name__ == "__main__":
+    import asyncio
     main()

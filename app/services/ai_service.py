@@ -47,22 +47,22 @@ class AIService:
                 logger.info(f"Generated suggestions: {suggestions}")
                 return suggestions
             elif self.ai_provider == "gemini":
+                # Hypothetical Gemini API endpoint and structure
                 async with self.session.post(
-                    "https://api.gemini.ai/v1/completions",  # Replace with actual Gemini API endpoint
-                    headers={"Authorization": f"Bearer {settings.gemini_api_key}"},
+                    "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent",  # Example endpoint
+                    headers={"x-goog-api-key": settings.gemini_api_key},
                     json={
-                        "model": self.ai_model,
-                        "prompt": f"Based on these items: {', '.join(items)}, suggest additional shopping items.",
-                        "max_tokens": 100
+                        "contents": [{"parts": [{"text": f"Based on these items: {', '.join(items)}, suggest additional shopping items."}]}],
+                        "generationConfig": {"maxOutputTokens": 100}
                     }
                 ) as response:
                     if response.status == 200:
                         data = await response.json()
-                        suggestions = data.get("choices", [{}])[0].get("text", "").split(", ")
+                        suggestions = data.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "").split(", ")
                         logger.info(f"Generated suggestions: {suggestions}")
                         return suggestions
                     else:
-                        logger.error(f"Gemini API error: {response.status}")
+                        logger.error(f"Gemini API error: {response.status} - {await response.text()}")
                         return []
         except Exception as e:
             logger.error(f"Failed to generate suggestions: {e}")
@@ -136,8 +136,8 @@ class AIService:
         elif self.ai_provider == "gemini" and self.session:
             async def test_gemini():
                 async with self.session.get(
-                    "https://api.gemini.ai/v1/models",  # Replace with actual endpoint
-                    headers={"Authorization": f"Bearer {settings.gemini_api_key}"}
+                    "https://generativelanguage.googleapis.com/v1beta/models",  # Example endpoint
+                    headers={"x-goog-api-key": settings.gemini_api_key}
                 ) as response:
                     if response.status != 200:
                         raise Exception("Gemini connection failed")

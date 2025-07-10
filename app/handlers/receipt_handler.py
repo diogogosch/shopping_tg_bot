@@ -3,14 +3,25 @@ from datetime import datetime
 from telegram import Update
 from telegram.ext import ContextTypes
 from telegram.error import TelegramError
-from app.database import get_db
+from app.core.database import get_db
 from app.models import Receipt, ReceiptItem, Product
 from app.services import ocr_service, ai_service
 from app.utils import i18n
 from app import settings
 import logging
+from contextlib import contextmanager
 
 logger = logging.getLogger(__name__)
+
+@contextmanager
+def temp_file_manager(file_id: str):
+    file_path = f"temp/{file_id}.jpg"
+    os.makedirs("temp", exist_ok=True)
+    try:
+        yield file_path
+    finally:
+        if os.path.exists(file_path):
+            os.remove(file_path)
 
 async def process_receipt(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message.photo:
@@ -19,10 +30,8 @@ async def process_receipt(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     photo = update.message.photo[-1]
     file = await photo.get_file()
-    os.makedirs("temp", exist_ok=True)
-    file_path = f"temp/{photo.file_id}.jpg"
     
-    try:
+    with temp_file_manager(photo.file_id) as file_path:
         try:
             await file.download(file_path)
         except TelegramError as te:
@@ -86,6 +95,3 @@ async def process_receipt(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Error processing receipt: {e}")
         await update.message.reply_text(i18n.get_text("error_occurred", update.effective_user.language_code))
-    finally:
-        if os.path.exists(file_path):
-            os.remove(file_path)
