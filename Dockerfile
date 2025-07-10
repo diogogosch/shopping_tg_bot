@@ -1,21 +1,26 @@
 FROM python:3.11-slim
 
-WORKDIR /app
+# Set working directory to root
+WORKDIR /
 
+# Copy requirements first for better layer caching
 COPY requirements.txt .
 
+# Install dependencies and system packages
 RUN pip install --no-cache-dir -r requirements.txt && \
     apt-get update && \
     apt-get install -y tesseract-ocr libtesseract-dev curl && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
+# Copy all application files
 COPY . .
 
-# fail early if the file is missing
+# Verify the main file exists
 RUN test -f /app/main.py
 
-CMD ["python", "/app/main.py"]
+# Set Python path to include the current directory
+ENV PYTHONPATH=/
 
-WORKDIR /app
-CMD ["python", "main.py"]   # if /app/main.py exists
+# Run the application from root directory
+CMD ["python", "app/main.py"]
