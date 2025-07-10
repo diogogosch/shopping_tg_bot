@@ -22,6 +22,7 @@ services:
         condition: service_healthy
     volumes:
       - ./app:/app
+      - ./temp:/app/temp
       - logs:/app/logs
     networks:
       - smartshop_network

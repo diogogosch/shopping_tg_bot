@@ -6,7 +6,7 @@ from typing import Generator
 import logging
 
 from app.config.settings import settings
-from app.models.user import Base
+from app.models.product import Base
 
 logger = logging.getLogger(__name__)
 
