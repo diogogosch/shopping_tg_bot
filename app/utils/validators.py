@@ -1,57 +1,28 @@
 import re
-from typing import Optional
+import logging
 
-def validate_email(email: str) -> bool:
-    """Validate email format"""
-    pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-    return bool(re.match(pattern, email))
+logger = logging.getLogger(__name__)
 
-def validate_currency_code(code: str) -> bool:
-    """Validate currency code"""
-    valid_currencies = ['USD', 'EUR', 'GBP', 'BRL', 'CAD', 'AUD', 'JPY', 'CNY']
-    return code.upper() in valid_currencies
-
-def validate_language_code(code: str) -> bool:
-    """Validate language code"""
-    valid_languages = ['en', 'es', 'pt', 'fr', 'de', 'it', 'ru', 'zh']
-    return code.lower() in valid_languages
-
-def validate_price(price: str) -> Optional[float]:
-    """Validate and parse price string"""
-    try:
-        # Remove currency symbols and spaces
-        cleaned = re.sub(r'[^\d.,]', '', price)
-        # Replace comma with dot for decimal
-        cleaned = cleaned.replace(',', '.')
-        
-        value = float(cleaned)
-        return value if value >= 0 else None
-    except (ValueError, TypeError):
-        return None
-
-def validate_quantity(quantity: str) -> Optional[float]:
-    """Validate and parse quantity string"""
-    try:
-        # Extract numeric part
-        numeric = re.search(r'(\d+(?:\.\d+)?)', quantity)
-        if numeric:
-            value = float(numeric.group(1))
-            return value if value > 0 else None
-    except (ValueError, TypeError):
-        pass
-    return None
-
-def sanitize_filename(filename: str) -> str:
-    """Sanitize filename for safe storage"""
-    # Remove or replace dangerous characters
-    sanitized = re.sub(r'[<>:"/\\|?*]', '_', filename)
-    # Limit length
-    return sanitized[:255]
-
-def validate_telegram_user_id(user_id: any) -> bool:
-    """Validate Telegram user ID"""
-    try:
-        uid = int(user_id)
-        return uid > 0
-    except (ValueError, TypeError):
+def validate_item_name(item_name: str) -> bool:
+    """
+    Validate item name to prevent XSS and SQL injection.
+    Allows alphanumeric characters, spaces, and common punctuation.
+    """
+    if not item_name or len(item_name) > 100:
+        logger.warning(f"Invalid item name length: {item_name}")
         return False
+    
+    # Allow letters, numbers, spaces, and common punctuation
+    pattern = r'^[a-zA-Z0-9\s\-\,\.\(\)]+$'
+    if not re.match(pattern, item_name):
+        logger.warning(f"Invalid characters in item name: {item_name}")
+        return False
+    
+    # Prevent common SQL injection patterns
+    dangerous_patterns = [r'\bSELECT\b', r'\bINSERT\b', r'\bDELETE\b', r'\bUPDATE\b', r'--', r';']
+    for pattern in dangerous_patterns:
+        if re.search(pattern, item_name, re.IGNORECASE):
+            logger.warning(f"Potential SQL injection detected: {item_name}")
+            return False
+    
+    return True

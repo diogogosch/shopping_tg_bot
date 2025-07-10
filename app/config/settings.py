@@ -1,6 +1,7 @@
 import os
 from typing import Optional, Literal
 from pydantic import BaseSettings, validator
+from urllib.parse import urlparse
 
 class Settings(BaseSettings):
     # Bot Configuration
@@ -13,15 +14,15 @@ class Settings(BaseSettings):
     database_max_overflow: int = 20
     
     # Redis Configuration
-    redis_url: str = "redis://localhost:6379"
+    redis_url: str = "redis://redis:6379"
     redis_ttl: int = 3600
     
     # OCR Configuration
-    tesseract_path: Optional[str] = None
+    tesseract_path: Optional[str] = "/usr/bin/tesseract"
     google_vision_api_key: Optional[str] = None
     
     # AI Configuration
-    ai_provider: Literal["openai", "gemini", "auto"] = "auto"
+    ai_provider: Literal["openai", "gemini", "none"] = "none"
     openai_api_key: Optional[str] = None
     gemini_api_key: Optional[str] = None
     ai_model_openai: str = "gpt-3.5-turbo"
@@ -45,25 +46,36 @@ class Settings(BaseSettings):
             raise ValueError('Invalid Telegram token')
         return v
     
+    @validator('database_url')
+    def validate_database_url(cls, v):
+        parsed = urlparse(v)
+        if parsed.scheme != 'postgresql':
+            raise ValueError('Database URL must use postgresql scheme')
+        if not parsed.hostname or not parsed.username:
+            raise ValueError('Database URL must include hostname and username')
+        return v
+    
+    @validator('redis_url')
+    def validate_redis_url(cls, v):
+        parsed = urlparse(v)
+        if parsed.scheme != 'redis':
+            raise ValueError('Redis URL must use redis scheme')
+        return v
+    
     @validator('ai_provider')
     def validate_ai_provider(cls, v, values):
-        if v == "auto":
+        if v == "none" and (values.get('openai_api_key') or values.get('gemini_api_key')):
             if values.get('openai_api_key'):
                 return "openai"
             elif values.get('gemini_api_key'):
                 return "gemini"
-            else:
-                return "none"
+        if v == "openai" and not values.get('openai_api_key'):
+            raise ValueError('OpenAI API key required for openai provider')
+        if v == "gemini" and not values.get('gemini_api_key'):
+            raise ValueError('Gemini API key required for gemini provider')
         return v
     
     def get_active_ai_provider(self) -> str:
-        if self.ai_provider == "auto":
-            if self.openai_api_key:
-                return "openai"
-            elif self.gemini_api_key:
-                return "gemini"
-            else:
-                return "none"
         return self.ai_provider
     
     def get_ai_model(self) -> str:
@@ -73,7 +85,7 @@ class Settings(BaseSettings):
         elif provider == "gemini":
             return self.ai_model_gemini
         return ""
-    
+
     class Config:
         env_file = ".env"
         case_sensitive = False
