@@ -2,8 +2,10 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
+# Copy requirements first for better caching
 COPY requirements.txt .
 
+# Install dependencies and system packages
 RUN pip install --no-cache-dir -r requirements.txt && \
     apt-get update && \
     apt-get install -y tesseract-ocr libtesseract-dev curl && \
@@ -13,11 +15,16 @@ RUN pip install --no-cache-dir -r requirements.txt && \
 # Copy the entire project
 COPY . .
 
-# Verify main.py exists
-RUN test -f /app/app/main.py
+# Verify the file structure
+RUN ls -la /app && ls -la /app/app && test -f /app/app/main.py
 
-# Add the parent directory to Python path
+# Set environment variables
 ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
 
-# Run using module syntax
+# Health check
+HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8080/health || exit 1
+
+# Run the application
 CMD ["python", "-m", "app.main"]
